@@ -4,3 +4,5 @@ openpyxl
 plotly
 xlrd
 lxml
+gspread
+google-auth
