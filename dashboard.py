@@ -123,13 +123,11 @@ def init_gsheets():
 
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-        # Cek apakah jalan di Streamlit Cloud (pakai Secrets) atau di lokal
+        # Cek apakah dijalankan di Streamlit Cloud (via Secrets) atau di lokal
         if "gcp_credentials" in st.secrets:
-            # Baca rahasia dari Streamlit Cloud
             creds_dict = json.loads(st.secrets["gcp_credentials"])
             creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         else:
-            # Baca file json kalau masih jalan di laptop sendiri
             creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
 
         client = gspread.authorize(creds)
