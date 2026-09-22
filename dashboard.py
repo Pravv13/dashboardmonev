@@ -430,6 +430,20 @@ if st.session_state.df_hasil is not None:
         # --- TAB 3: EKSPLORASI DATA & FORM JUSTIFY ---
         with tab3:
             st.subheader("Tabel Anomali & Pengecualian")
+            # --- TOMBOL DOWNLOAD EXCEL ---
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_hasil.to_excel(writer, index=False, sheet_name='Data Anomali')
+
+            st.download_button(
+                label="📥 Unduh Data Anomali (.xlsx)",
+                data=output.getvalue(),
+                file_name="Laporan_Anomali_DQA.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
+            )
+
+            st.dataframe(df_hasil, use_container_width=True, height=300)
             st.dataframe(df_hasil, use_container_width=True, height=300)
 
             # FORM JUSTIFY (SARAN IBAN)
