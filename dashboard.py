@@ -444,7 +444,6 @@ if st.session_state.df_hasil is not None:
             )
 
             st.dataframe(df_hasil, use_container_width=True, height=300)
-            st.dataframe(df_hasil, use_container_width=True, height=300)
 
             # FORM JUSTIFY (SARAN IBAN)
             if sheet_db is not None:
