@@ -313,6 +313,14 @@ if st.session_state.df_hasil is not None:
         with tab1:
             st.success(
                 "🎉 Sempurna! Data valid dan tersinkronisasi 100%. Tidak ditemukan pelanggaran logika (atau semua anomali telah di-Whitelist).")
+            st.subheader("🏆 Ringkasan Capaian IU")
+            capaian = st.session_state.capaian_layanan
+
+            cp1, cp2, cp3, cp4 = st.columns(4)
+            cp1.metric(label="Dukungan Psikososial", value=f"{capaian['psiko']} Klien", help="Total ID Klien Unik")
+            cp2.metric(label="On ART", value=f"{capaian['on_art']} Klien", help="Status 1, 2, dan 4")
+            cp3.metric(label="LFU", value=f"{capaian['lfu']} Klien", help="Status 3")
+            cp4.metric(label="Non-ART", value=f"{capaian['non_art']} Klien", help="Status 0")
         with tab2:
             st.info("Tidak ada data anomali untuk dianalisis.")
         with tab3:
@@ -322,7 +330,7 @@ if st.session_state.df_hasil is not None:
 
         # --- TAB 1: EXECUTIVE SUMMARY ---
         with tab1:
-            st.subheader("🏆 Ringkasan Capaian Layanan")
+            st.subheader("🏆 Ringkasan Capaian IU")
             capaian = st.session_state.capaian_layanan
 
             cp1, cp2, cp3, cp4 = st.columns(4)
