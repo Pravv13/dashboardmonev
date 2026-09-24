@@ -526,3 +526,230 @@ if st.session_state.df_hasil is not None:
                                             f"Pengecualian Klien {cabut_id} berhasil dicabut! Eksekusi ulang pipeline ETL untuk menyegarkan.")
                                 except Exception as e:
                                     st.error(f"Gagal mencabut data: {e}")
+
+    # ==========================================
+    # 5. TATA LETAK MULTI-TAB (EXECUTIVE VIEW)
+    # ==========================================
+    if st.session_state.df_hasil is not None:
+        df_hasil = st.session_state.df_hasil
+
+        # 1. Deklarasi Tab SELALU DI LUAR pengecekan if-else agar selalu muncul
+        tab1, tab2, tab3, tab4 = st.tabs(
+            ["📊 Executive Summary", "📈 Analisis Visual Mendalam", "🗃️ Eksplorasi Data", "🛡️ Manajemen Whitelist"]
+        )
+
+        if df_hasil.empty:
+            # Jika data bersih 100%, tampilkan pesan sukses di tab terkait
+            with tab1:
+                st.success(
+                    "🎉 Sempurna! Data valid dan tersinkronisasi 100%. Tidak ditemukan pelanggaran logika (atau semua anomali telah di-Whitelist).")
+            with tab2:
+                st.info("Tidak ada data anomali untuk dianalisis.")
+            with tab3:
+                st.info("Tabel eksplorasi kosong karena tidak ada anomali.")
+        else:
+            # Jika ada anomali, masukkan visualisasi dan tabel ke tab masing-masing
+
+            # --- TAB 1: EXECUTIVE SUMMARY ---
+            with tab1:
+                st.subheader("🏆 Ringkasan Capaian Layanan")
+                capaian = st.session_state.capaian_layanan
+
+                cp1, cp2, cp3, cp4 = st.columns(4)
+                cp1.metric(label="Dukungan Psikososial", value=f"{capaian['psiko']} Klien", help="Total ID Klien Unik")
+                cp2.metric(label="On ART", value=f"{capaian['on_art']} Klien", help="Status 1, 2, dan 4")
+                cp3.metric(label="LFU", value=f"{capaian['lfu']} Klien", help="Status 3")
+                cp4.metric(label="Non-ART", value=f"{capaian['non_art']} Klien", help="Status 0")
+
+                st.markdown("---")
+                st.subheader("Ringkasan Eksekutif Temuan Anomali")
+
+                total_anomali = len(df_hasil)
+                aturan_unik = df_hasil['Kategori Aturan (Rule)'].nunique()
+                rule_terbanyak = df_hasil['Kategori Aturan (Rule)'].mode()[0]
+
+                kpi1, kpi2, kpi3 = st.columns(3)
+                kpi1.metric(label="Total Temuan Anomali", value=f"{total_anomali} Kasus", delta="Dari total baris data",
+                            delta_color="inverse")
+                kpi2.metric(label="Jumlah Rule Dilanggar", value=f"{aturan_unik} Rule", delta="Dari Total 27 Aturan",
+                            delta_color="off")
+                kpi3.metric(label="Aturan Paling Rentan", value=rule_terbanyak.split(":")[0], delta="Perlu peninjauan",
+                            delta_color="inverse")
+
+                st.markdown("---")
+                col_chart1, col_chart2 = st.columns(2)
+
+                with col_chart1:
+                    st.write("**Data Health Score (Indeks Mutu Data)**")
+                    total_baris = st.session_state.total_baris_data
+                    skor_kesehatan = max(0, 100 - (total_anomali / total_baris * 100)) if total_baris > 0 else 0
+
+                    fig_gauge = go.Figure(go.Indicator(
+                        mode="gauge+number",
+                        value=skor_kesehatan,
+                        title={'text': "Kualitas Data (%)", 'font': {'size': 18}},
+                        number={'suffix': "%", 'font': {'size': 42}},
+                        gauge={
+                            'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "gray"},
+                            'bgcolor': "rgba(0,0,0,0)",
+                            'bar': {'color': "#00E676" if skor_kesehatan >= 90 else (
+                                "#FFD600" if skor_kesehatan >= 75 else "#FF1744")},
+                            'steps': [{'range': [0, 100], 'color': "rgba(128, 128, 128, 0.2)"}],
+                            'threshold': {'line': {'color': "#FF1744", 'width': 4}, 'thickness': 0.75, 'value': 90}
+                        }
+                    ))
+                    fig_gauge.update_layout(height=350, margin=dict(l=20, r=20, t=50, b=20))
+                    st.plotly_chart(fig_gauge, use_container_width=True, theme="streamlit")
+
+                with col_chart2:
+                    st.write("**Komposisi Pelanggaran Data**")
+                    df_pie = df_hasil['Kategori Aturan (Rule)'].value_counts().reset_index()
+                    df_pie.columns = ['Rule', 'Jumlah']
+                    df_pie.loc[df_pie['Jumlah'] < (total_anomali * 0.05), 'Rule'] = 'Lainnya (<5%)'
+                    fig_pie = px.pie(df_pie, values='Jumlah', names='Rule', hole=0.4,
+                                     color_discrete_sequence=px.colors.sequential.RdBu)
+                    fig_pie.update_traces(textposition='inside', textinfo='percent')
+                    fig_pie.update_layout(height=350, margin=dict(l=20, r=20, t=30, b=20), showlegend=True)
+                    st.plotly_chart(fig_pie, use_container_width=True)
+
+            # --- TAB 2: ANALISIS VISUAL ---
+            with tab2:
+                st.subheader("📈 Analisis Tren Waktu Anomali")
+                if 'Tanggal Laporan' in df_hasil.columns and not df_hasil['Tanggal Laporan'].isna().all():
+                    df_tren = df_hasil.groupby(df_hasil['Tanggal Laporan'].dt.date).size().reset_index(
+                        name='Jumlah Anomali')
+                    fig_line = px.line(df_tren, x='Tanggal Laporan', y='Jumlah Anomali', markers=True,
+                                       color_discrete_sequence=['#E91E63'])
+                    fig_line.update_layout(xaxis_title="Tanggal Laporan", yaxis_title="Total Anomali", height=350)
+                    st.plotly_chart(fig_line, use_container_width=True)
+                else:
+                    st.info("Tidak ada data tanggal yang dapat diekstrak secara otomatis untuk analisis tren waktu.")
+
+                st.markdown("---")
+                col_analisis1, col_analisis2 = st.columns(2)
+
+                with col_analisis1:
+                    st.subheader("🗺️ Top Wilayah Penyumbang Anomali")
+                    if 'Wilayah (Kab/Kota)' in df_hasil.columns:
+                        df_wilayah = df_hasil['Wilayah (Kab/Kota)'].fillna(
+                            'Tidak Diketahui').value_counts().reset_index()
+                        df_wilayah.columns = ['Wilayah', 'Jumlah']
+                        fig_wil = px.bar(df_wilayah.head(10), x='Jumlah', y='Wilayah', orientation='h', color='Jumlah',
+                                         color_continuous_scale='Blues', text='Jumlah')
+                        fig_wil.update_layout(yaxis={'categoryorder': 'total ascending'}, height=400, showlegend=False)
+                        fig_wil.update_traces(textposition='outside', textfont_size=13)
+                        st.plotly_chart(fig_wil, use_container_width=True)
+                    else:
+                        st.info("Data Wilayah tidak tersedia.")
+
+                with col_analisis2:
+                    st.subheader("👥 Analisis Kinerja Petugas")
+                    if 'Nama Petugas' in df_hasil.columns:
+                        df_petugas = df_hasil['Nama Petugas'].fillna(
+                            'Tidak Diketahui / Kode Tidak Valid').value_counts().reset_index()
+                        df_petugas.columns = ['Nama Petugas', 'Jumlah']
+                        batas_tampil = st.selectbox("Pilih Tampilan Petugas:", ["Top 5", "Top 10", "Top 20", "Semua"],
+                                                    index=1, key="filter_petugas")
+                        df_ptg_tampil = df_petugas if batas_tampil == "Semua" else df_petugas.head(
+                            int(batas_tampil.split(" ")[1]))
+                        fig_petugas = px.bar(df_ptg_tampil, x='Jumlah', y='Nama Petugas', orientation='h',
+                                             color='Jumlah', color_continuous_scale='Oranges', text='Jumlah')
+                        fig_petugas.update_layout(yaxis={'categoryorder': 'total ascending'}, height=400,
+                                                  showlegend=False)
+                        fig_petugas.update_traces(textposition='outside', textfont_size=13)
+                        st.plotly_chart(fig_petugas, use_container_width=True)
+                    else:
+                        st.info("Data Petugas tidak tersedia.")
+
+            # --- TAB 3: EKSPLORASI DATA & FORM JUSTIFY ---
+            with tab3:
+                st.subheader("Tabel Anomali & Pengecualian")
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_hasil.to_excel(writer, index=False, sheet_name='Data Anomali')
+
+                st.download_button(
+                    label="📥 Unduh Data Anomali (.xlsx)",
+                    data=output.getvalue(),
+                    file_name="Laporan_Anomali_DQA.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary"
+                )
+
+                st.dataframe(df_hasil, use_container_width=True, height=300)
+
+                if sheet_db is not None:
+                    st.markdown("---")
+                    st.write("🛡️ **Form Pengecualian Data Khusus (Justify)**")
+                    st.caption("Gunakan form ini jika anomali di atas valid karena kondisi medis/lapangan khusus.")
+
+                    with st.form("form_justify"):
+                        col_j1, col_j2 = st.columns(2)
+                        with col_j1:
+                            pilihan_id = st.selectbox("1. Pilih ID Klien yang Dikecualikan:", df_hasil[
+                                'ID Klien'].dropna().unique() if not df_hasil.empty else ["-"])
+                            pilihan_rule = st.selectbox("2. Aturan yang Dikecualikan:",
+                                                        df_hasil[df_hasil['ID Klien'] == pilihan_id][
+                                                            'Kategori Aturan (Rule)'].unique() if not df_hasil.empty and pilihan_id != "-" else [
+                                                            "-"])
+                        with col_j2:
+                            alasan = st.text_input("3. Alasan Validitas Data (Wajib):")
+                            petugas_monev = st.text_input("4. Nama Anda (Petugas Monev):")
+
+                        submit_justify = st.form_submit_button("✅ Masukkan ke Whitelist", type="primary")
+
+                        if submit_justify:
+                            if alasan == "" or petugas_monev == "":
+                                st.warning("Alasan dan Nama Petugas tidak boleh kosong!")
+                            else:
+                                try:
+                                    waktu = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    lembaga_klien = df_hasil[df_hasil['ID Klien'] == pilihan_id]['Lembaga'].values[
+                                        0] if 'Lembaga' in df_hasil.columns else "Tidak Diketahui"
+                                    sheet_db.append_row(
+                                        [pilihan_id, pilihan_rule, alasan, petugas_monev, waktu, str(lembaga_klien)])
+                                    st.success(f"Berhasil! Data {pilihan_id} dari {lembaga_klien} telah dikecualikan.")
+                                except Exception as e:
+                                    st.error(f"Gagal menghubungi server database: {e}")
+                else:
+                    st.error("Sistem gagal terhubung ke Cloud Database. Fitur Whitelist dinonaktifkan.")
+
+        # --- TAB 4: MANAJEMEN WHITELIST (ADMIN) - SEKARANG DI LUAR IF-ELSE ---
+        with tab4:
+            st.subheader("🛡️ Daftar Data Pengecualian (Whitelist)")
+            if sheet_db is not None:
+                data_wl = sheet_db.get_all_records()
+                df_wl_tampil = pd.DataFrame(data_wl)
+
+                if df_wl_tampil.empty:
+                    st.info("Belum ada data klien yang dimasukkan ke daftar pengecualian.")
+                else:
+                    # Cek ketersediaan kolom 'Lembaga' di df_hasil
+                    # Karena df_hasil mungkin kosong (jika sukses 100%), gunakan session_state asli yg belum di-filter wl
+                    if 'df_hasil' in st.session_state and not st.session_state.df_hasil.empty and 'Lembaga' in st.session_state.df_hasil.columns:
+                        lembaga_aktif = st.session_state.df_hasil['Lembaga'].dropna().unique().tolist()
+                        if lembaga_aktif and 'Lembaga' in df_wl_tampil.columns:
+                            df_wl_tampil = df_wl_tampil[df_wl_tampil['Lembaga'].isin(lembaga_aktif)]
+
+                    if df_wl_tampil.empty:
+                        st.info(
+                            "Aman. Tidak ada data pengecualian (whitelist) yang aktif untuk Lembaga pada file yang Anda unggah.")
+                    else:
+                        st.dataframe(df_wl_tampil, use_container_width=True)
+
+                        st.markdown("---")
+                        st.write("❌ **Cabut Status Pengecualian (Unwhitelist) Khusus Lembaga Anda**")
+                        with st.form("form_cabut"):
+                            cabut_id = st.selectbox("Pilih ID Klien yang akan dihapus dari Whitelist:",
+                                                    df_wl_tampil['ID Klien'].unique())
+                            submit_cabut = st.form_submit_button("Cabut Justify (Hapus)", type="primary")
+
+                            if submit_cabut:
+                                try:
+                                    cell = sheet_db.find(str(cabut_id))
+                                    if cell:
+                                        sheet_db.delete_rows(cell.row)
+                                        st.success(
+                                            f"Pengecualian Klien {cabut_id} berhasil dicabut! Eksekusi ulang pipeline ETL untuk menyegarkan.")
+                                except Exception as e:
+                                    st.error(f"Gagal mencabut data: {e}")
